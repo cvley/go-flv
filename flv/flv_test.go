@@ -5,10 +5,13 @@ import (
 )
 
 func TestFlvHeader(t *testing.T) {
-	testCases := [][]byte{
+	succCases := [][]byte{
 		[]byte{0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09},
 		[]byte{0x46, 0x4c, 0x56, 0x01, 0x04, 0x00, 0x00, 0x00, 0x09},
 		[]byte{0x46, 0x4c, 0x56, 0x01, 0x01, 0x00, 0x00, 0x00, 0x09},
+	}
+
+	failCases := [][]byte{
 		[]byte{0x47, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09},
 		[]byte{0x46, 0x4c, 0x56, 0x02, 0x05, 0x00, 0x00, 0x00, 0x09},
 		[]byte{0x46, 0x4c, 0x56, 0x01, 0x08, 0x00, 0x00, 0x00, 0x09},
@@ -16,17 +19,19 @@ func TestFlvHeader(t *testing.T) {
 		[]byte{0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x08},
 	}
 
-	for _, testcase := range testCases {
-		flvHeader, err := NewFlvHeader(testcase)
+	for _, item := range succCases {
+		header, err := NewFlvHeader(item)
 		if err != nil {
-			t.Errorf("test case %v fail: %s", string(testcase), err)
+			t.Errorf("test case %s fail: %s", string(item), err)
 			continue
 		}
-		if flvHeader.IsValid() == false {
-			t.Logf("test case %v is invalid", string(testcase))
-			continue
+		t.Logf("test case %s succ: %s", string(item), header)
+	}
+
+	for _, item := range failCases {
+		if _, err := NewFlvHeader(item); err == nil {
+			t.Errorf("test case %v should fail", string(item))
 		}
-		t.Logf("test case %s succ: %s", string(testcase), flvHeader)
 	}
 }
 

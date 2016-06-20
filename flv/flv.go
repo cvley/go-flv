@@ -86,21 +86,35 @@ type FlvHeader struct {
 
 func NewFlvHeader(data []byte) (*FlvHeader, error) {
 	if len(data) != 9 {
-		return nil, fmt.Errorf("invalid input data length %d", len(data))
+		return nil, fmt.Errorf("invalid flv: length %d not equal 9", len(data))
+	}
+
+	if string(data[:3]) != "FLV" {
+		return nil, fmt.Errorf("invalid flv: %s not equal FLV", string(data[:3]))
 	}
 
 	var version uint8
 	if err := binary.Read(bytes.NewReader(data[3:4]), binary.BigEndian, &version); err != nil {
 		return nil, err
 	}
+	if version != 1 {
+		return nil, fmt.Errorf("invalid flv: version %d not 1", version)
+	}
 
 	var flags uint8
 	if err := binary.Read(bytes.NewReader(data[4:5]), binary.BigEndian, &flags); err != nil {
 		return nil, err
 	}
+	if flags != 1 && flags != 4 && flags != 5 {
+		return nil, fmt.Errorf("invalid flv: invalid audio and video flags %d", flags)
+	}
+
 	var offset uint32
 	if err := binary.Read(bytes.NewReader(data[5:]), binary.BigEndian, &offset); err != nil {
 		return nil, err
+	}
+	if offset != 9 {
+		return nil, fmt.Errorf("invalid flv: offset %d not equal 9", offset)
 	}
 
 	return &FlvHeader{
@@ -136,23 +150,6 @@ func (h *FlvHeader) String() string {
 	return buffer.String()
 }
 
-func (h *FlvHeader) IsValid() bool {
-	if !bytes.Equal(h.signature, []byte("FLV")) {
-		return false
-	}
-
-	if h.version != 1 {
-		return false
-	}
-
-	if h.dataOffset != uint32(9) {
-		fmt.Println("offset not match")
-		return false
-	}
-
-	return true
-}
-
 type FlvTag struct {
 	tagType      uint8
 	dataSize     uint32
@@ -160,6 +157,14 @@ type FlvTag struct {
 	timestampExt uint8
 	streamId     uint32
 	data         []byte
+}
+
+func (tag *FlvTag) ParseAudioTag() (*AudioTag, error) {
+
+}
+
+func (tag *FlvTag) ParseVideoTag() (*VideoTag, error) {
+
 }
 
 type AudioTag struct {
@@ -251,14 +256,14 @@ func (r *FlvReader) ReadTag() (*FlvTag, error) {
 		return nil, err
 	}
 
-	flvTag.dataSize = Uint32(tagHeader[1:4])
-	flvTag.timestamp = Uint32(tagHeader[4:7])
+	flvTag.dataSize = convertUint32(tagHeader[1:4])
+	flvTag.timestamp = convertUint32(tagHeader[4:7])
 
 	if err := binary.Read(bytes.NewReader(tagHeader[7:8]), binary.BigEndian, &flvTag.timestampExt); err != nil {
 		return nil, err
 	}
 
-	flvTag.streamId = Uint32(tagHeader[8:])
+	flvTag.streamId = convertUint32(tagHeader[8:])
 
 	flvTag.data = make([]byte, flvTag.dataSize, flvTag.dataSize)
 	n, err = r.f.Read(flvTag.data)
@@ -283,11 +288,14 @@ func (r *FlvReader) ReadTag() (*FlvTag, error) {
 	if err := binary.Read(bytes.NewReader(PrevTagSize), binary.BigEndian, &tagSize); err != nil {
 		return nil, err
 	}
-	fmt.Printf("tagsize: %d\n\n", tagSize)
+
+	if tagSize != flvTag.dataSize+11 {
+		return nil, fmt.Errorf("previous tag size %d not equal data size %d + 4", tagSize, flvTag.dataSize)
+	}
 
 	return flvTag, nil
 }
 
-func Uint32(b []byte) uint32 {
+func convertUint32(b []byte) uint32 {
 	return uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
 }
