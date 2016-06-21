@@ -74,3 +74,13 @@ func TestParseAudioTagData(t *testing.T) {
 	}
 	t.Logf("%s", audio)
 }
+
+func TestParseVideoTagData(t *testing.T) {
+	tagdata := []byte{0x23, 0x00}
+
+	video, err := ParseVideoTagData(tagdata)
+	if err != nil {
+		t.Fatalf("parse video tag data fail: %s", err)
+	}
+	t.Logf("%s", video)
+}

@@ -51,7 +51,6 @@ var (
 	}
 
 	VideoType = []string{
-		"not defined by standard",
 		"keyframe (for AVC, a seekable frame)",
 		"inter frame (for AVC, a non-seekable frame)",
 		"disposable inter frame (H.263 only)",
@@ -182,7 +181,15 @@ func ParseAudioTagData(tagdata []byte) (*AudioTagData, error) {
 }
 
 func ParseVideoTagData(tagdata []byte) (*VideoTagData, error) {
-	return nil, nil
+	info := uint8(tagdata[0])
+	tp := (info >> 4) & 0x0d
+	codec := info & 0x0d
+
+	return &VideoTagData{
+		frameType: VideoType[tp],
+		codec:     VideoCodes[codec],
+		data:      tagdata[1:],
+	}, nil
 }
 
 type AudioTagData struct {
@@ -326,6 +333,23 @@ func (r *FlvReader) ReadTag() (*FlvTag, error) {
 	}
 	if n != int(flvTag.dataSize) {
 		return nil, fmt.Errorf("read data size fail: %d [%d]", n, flvTag.dataSize)
+	}
+
+	switch flvTag.tagType {
+	case 8:
+		flvTag.data, err = ParseAudioTagData(data)
+		if err != nil {
+			return nil, err
+		}
+
+	case 9:
+		flvTag.data, err = ParseVideoTagData(data)
+		if err != nil {
+			return nil, err
+		}
+
+	case 18:
+		return nil, fmt.Errorf("script not support")
 	}
 
 	// read the Previous Tag Size
