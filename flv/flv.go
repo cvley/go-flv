@@ -156,29 +156,83 @@ type FlvTag struct {
 	timestamp    uint32
 	timestampExt uint8
 	streamId     uint32
-	data         []byte
+	data         TagData
 }
 
-func (tag *FlvTag) ParseAudioTag() (*AudioTag, error) {
-
+type TagData interface {
+	Format() string
+	String() string
+	Data() []byte
 }
 
-func (tag *FlvTag) ParseVideoTag() (*VideoTag, error) {
+func ParseAudioTagData(tagdata []byte) (*AudioTagData, error) {
+	info := uint32(tagdata[0])
+	f := (info >> 4) & 0x0d
+	tp := (info >> 2) & 0x02
+	sample := (info >> 1) & 0x01
+	br := info & 0x01
 
+	return &AudioTagData{
+		format:     AudioFormat[f],
+		bitrate:    AudioRate[br],
+		samplebits: AudioSize[sample],
+		tp:         AudioType[tp],
+		data:       tagdata[1:],
+	}, nil
 }
 
-type AudioTag struct {
-	format string
-	rate   string
-	size   string
-	aType  string
-	date   []byte
+func ParseVideoTagData(tagdata []byte) (*VideoTagData, error) {
+	return nil, nil
 }
 
-type VideoTag struct {
-	frameType int
-	codecId   int
-	date      []byte
+type AudioTagData struct {
+	format     string
+	bitrate    string
+	samplebits string
+	tp         string
+	data       []byte
+}
+
+func (tagdata *AudioTagData) Format() string {
+	return tagdata.format
+}
+
+func (tagdata *AudioTagData) String() string {
+	var buffer bytes.Buffer
+	buffer.WriteString("audio tag info:\n")
+	buffer.WriteString(fmt.Sprintf("\tFormat - %s\n", tagdata.format))
+	buffer.WriteString(fmt.Sprintf("\tBitrate - %s\n", tagdata.bitrate))
+	buffer.WriteString(fmt.Sprintf("\tSample bits - %s\n", tagdata.samplebits))
+	buffer.WriteString(fmt.Sprintf("\tType - %s\n", tagdata.tp))
+
+	return buffer.String()
+}
+
+func (tagdata *AudioTagData) Data() []byte {
+	return tagdata.data
+}
+
+type VideoTagData struct {
+	frameType string
+	codec     string
+	data      []byte
+}
+
+func (tagdata *VideoTagData) Format() string {
+	return tagdata.frameType
+}
+
+func (tagdata *VideoTagData) String() string {
+	var buffer bytes.Buffer
+	buffer.WriteString("video tag info:\n")
+	buffer.WriteString(fmt.Sprintf("\tFrame Type - %s\n", tagdata.frameType))
+	buffer.WriteString(fmt.Sprintf("\tCodec - %s\n", tagdata.codec))
+
+	return buffer.String()
+}
+
+func (tagdata *VideoTagData) Data() []byte {
+	return tagdata.data
 }
 
 type AvcTag struct {
@@ -265,8 +319,8 @@ func (r *FlvReader) ReadTag() (*FlvTag, error) {
 
 	flvTag.streamId = convertUint32(tagHeader[8:])
 
-	flvTag.data = make([]byte, flvTag.dataSize, flvTag.dataSize)
-	n, err = r.f.Read(flvTag.data)
+	data := make([]byte, flvTag.dataSize, flvTag.dataSize)
+	n, err = r.f.Read(data)
 	if err != nil {
 		return nil, err
 	}

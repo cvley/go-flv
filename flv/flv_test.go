@@ -64,3 +64,13 @@ func TestFlvReader(t *testing.T) {
 
 	t.Logf("tag %+v", tag)
 }
+
+func TestParseAudioTagData(t *testing.T) {
+	tagdata := []byte{0x43, 0x55}
+
+	audio, err := ParseAudioTagData(tagdata)
+	if err != nil {
+		t.Fatalf("parse audio tag data fail: %s", err)
+	}
+	t.Logf("%s", audio)
+}
