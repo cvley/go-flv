@@ -242,6 +242,129 @@ func (tagdata *VideoTagData) Data() []byte {
 	return tagdata.data
 }
 
+// Action Message Format
+var (
+	AmfList = []string{
+		"Number",
+		"Boolean",
+		"String",
+		"Object",
+		"MovieClip", // reserved, not supported
+		"Null",
+		"Undefined",
+		"Reference",
+		"ECMA Array",
+		"Object and marker",
+		"Strict array",
+		"Date",
+		"Long string",
+	}
+)
+
+type ScriptDataObject struct {
+	name ScriptDataString
+	data ScriptDataValue
+}
+
+func (object *ScriptDataObject) String() string {
+	var buffer bytes.Buffer
+	buffer.WriteString(fmt.Sprintf("script data type: %s\n", object.tp))
+	buffer.WriteString(fmt.Sprintf("script data size: %d\n", object.size))
+	buffer.WriteString(fmt.Sprintf("script data name: %s\n", object.name))
+	buffer.WriteString(fmt.Sprintf("script data data: %s\n", string(object.data)))
+
+	return buffer.String()
+}
+
+func (object *ScriptDataObject) Data() []byte {
+	return object.data
+}
+
+type ScriptDataString struct {
+	length uint32
+	data   string
+}
+
+type ScriptDataValue struct {
+	tp     string
+	length uint32
+	value  string
+}
+
+func ParseScriptData(data []byte) (*ScriptData, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty script data is invalid")
+	}
+
+	end := uint32(body[len(body)-1]) | uint32(body[len(body)-2])<<8 | uint32(body[len(body)-3])<<16
+	if end != 9 {
+		return nil, fmt.Errorf("invalid end value %d, should be 9", end)
+	}
+
+	scriptData := &ScriptData{
+		objects: []*ScriptDataObject{},
+		end:     end,
+		data:    data,
+	}
+
+	// parse
+	for i := 0; i < len(body); {
+		tp := uint8(body[i])
+		i += 1
+
+		var sz uint32
+		if tp != 8 {
+			sz = uint32(body[i])<<8 | uint32(body[i+1])
+			i += 2
+		} else {
+			if err := binary.Read(bytes.NewReader(body[i:i+4]), binary.BigEndian, &sz); err != nil {
+				return nil, err
+			}
+			i += 4
+		}
+
+		amf := &AMF{
+			tp:   AmfList[tp],
+			size: sz,
+			data: body[i : i+int(sz)],
+		}
+
+		fmt.Println(amf)
+
+		amfs = append(amfs, amf)
+		i += int(sz)
+	}
+
+	return &ScriptData{
+		objects: objects,
+		end:     uint32(9),
+		data:    body,
+	}, nil
+}
+
+type ScriptData struct {
+	objects []*ScriptDataObject
+	end     uint32
+	data    []byte
+}
+
+func (data *ScriptData) Format() string {
+	return "Script Data"
+}
+
+func (data *ScriptData) String() string {
+	var buffer bytes.Buffer
+	for _, object := range data.objects {
+		buffer.WriteString(object.String())
+		buffer.WriteString("\n")
+	}
+	return buffer.String()
+}
+
+func (data *ScriptData) Data() []byte {
+	return data.data
+}
+
 type AvcTag struct {
 	avcPacketType   int
 	compositionTime int
@@ -349,6 +472,13 @@ func (r *FlvReader) ReadTag() (*FlvTag, error) {
 		}
 
 	case 18:
+		//fmt.Println("script ", data, len(data))
+		flvTag.data, err = ParseScriptData(data)
+		if err != nil {
+			return nil, err
+		}
+
+	default:
 		return nil, fmt.Errorf("script not support")
 	}
 

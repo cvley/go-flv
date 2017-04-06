@@ -84,3 +84,7 @@ func TestParseVideoTagData(t *testing.T) {
 	}
 	t.Logf("%s", video)
 }
+
+func TestParseScriptData(t *testing.T) {
+	
+}
